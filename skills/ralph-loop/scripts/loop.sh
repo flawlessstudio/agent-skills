@@ -5,34 +5,57 @@
 
 set -e
 
-STOP_FILE="${RALPH_LOOP_STOP_FILE:-/tmp/ralph-loop.stop}"
+# Per-process stop file avoids interference between concurrent loops
+STOP_FILE="${RALPH_LOOP_STOP_FILE:-/tmp/ralph-loop-$$.stop}"
 MAX_RETRIES=3
 MIN_INTERVAL_SECONDS=30
 
-# Cleanup on exit
 trap 'echo "[ralph-loop] Stopped." >&2; rm -f "$STOP_FILE"' EXIT
 
 # Parse interval string (e.g. 5m → 300)
 parse_interval() {
   local raw="$1"
+  # Validate format upfront before any arithmetic
+  if ! [[ "$raw" =~ ^[0-9]+[smhd]$ ]] && ! [[ "$raw" =~ ^[0-9]+$ ]]; then
+    echo "Error: Invalid interval '$raw'. Use Ns/Nm/Nh/Nd (e.g. 5m, 2h)." >&2
+    exit 1
+  fi
   local unit="${raw: -1}"
   local num="${raw:0:${#raw}-1}"
-
   case "$unit" in
     s) echo "$num" ;;
     m) echo $((num * 60)) ;;
     h) echo $((num * 3600)) ;;
     d) echo $((num * 86400)) ;;
-    *)
-      # No unit — treat as seconds if purely numeric
-      if [[ "$raw" =~ ^[0-9]+$ ]]; then
-        echo "$raw"
-      else
-        echo "Error: Invalid interval '$raw'. Use Ns/Nm/Nh/Nd (e.g. 5m, 2h)." >&2
-        exit 1
-      fi
-      ;;
+    *) echo "$raw" ;;  # purely numeric, no unit suffix
   esac
+}
+
+# Emit JSON state with safe escaping of dynamic string fields
+emit_json() {
+  local iteration="$1" last_run="$2" next_run="$3" interval="$4" prompt="$5" status="$6"
+  if command -v jq >/dev/null 2>&1; then
+    if [[ "$next_run" == "null" ]]; then
+      jq -cn --argjson i "$iteration" --arg lr "$last_run" \
+              --argjson iv "$interval" --arg p "$prompt" --arg s "$status" \
+              '{iteration:$i,last_run:$lr,next_run:null,interval_seconds:$iv,prompt:$p,status:$s}'
+    else
+      jq -cn --argjson i "$iteration" --arg lr "$last_run" --arg nr "$next_run" \
+              --argjson iv "$interval" --arg p "$prompt" --arg s "$status" \
+              '{iteration:$i,last_run:$lr,next_run:$nr,interval_seconds:$iv,prompt:$p,status:$s}'
+    fi
+  else
+    # Fallback: escape backslashes and double-quotes
+    local escaped
+    escaped=$(printf '%s' "$prompt" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    if [[ "$next_run" == "null" ]]; then
+      printf '{"iteration":%d,"last_run":"%s","next_run":null,"interval_seconds":%d,"prompt":"%s","status":"%s"}\n' \
+        "$iteration" "$last_run" "$interval" "$escaped" "$status"
+    else
+      printf '{"iteration":%d,"last_run":"%s","next_run":"%s","interval_seconds":%d,"prompt":"%s","status":"%s"}\n' \
+        "$iteration" "$last_run" "$next_run" "$interval" "$escaped" "$status"
+    fi
+  fi
 }
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
@@ -77,7 +100,7 @@ ITERATION=0
 CONSECUTIVE_FAILURES=0
 
 echo "[ralph-loop] Starting loop: every ${INTERVAL_RAW} → \"$PROMPT\"" >&2
-rm -f "$STOP_FILE"
+echo "[ralph-loop] Stop file: $STOP_FILE" >&2
 
 while true; do
   ITERATION=$((ITERATION + 1))
@@ -88,8 +111,7 @@ while true; do
 
   echo "[ralph-loop] Iteration $ITERATION at $NOW" >&2
 
-  # Run the prompt (treated as a shell-level echo for agent-driven loops;
-  # the agent reads stdout and acts on it)
+  # Run the prompt (agent reads stdout and acts on it each iteration)
   RUN_OUTPUT=""
   RUN_STATUS=0
   RUN_OUTPUT=$(echo "$PROMPT") || RUN_STATUS=$?
@@ -97,9 +119,7 @@ while true; do
   # Check for stop signal in output
   if echo "$RUN_OUTPUT" | grep -q "STOP_LOOP"; then
     echo "[ralph-loop] Stop signal detected in output. Exiting." >&2
-    STATUS="stopped"
-    printf '{"iteration":%d,"last_run":"%s","next_run":null,"interval_seconds":%d,"prompt":"%s","status":"%s"}\n' \
-      "$ITERATION" "$NOW" "$INTERVAL_SECONDS" "$PROMPT" "$STATUS"
+    emit_json "$ITERATION" "$NOW" "null" "$INTERVAL_SECONDS" "$PROMPT" "stopped"
     exit 0
   fi
 
@@ -118,9 +138,7 @@ while true; do
     echo "$RUN_OUTPUT"
   fi
 
-  # Emit JSON state to stdout
-  printf '{"iteration":%d,"last_run":"%s","next_run":"%s","interval_seconds":%d,"prompt":"%s","status":"running"}\n' \
-    "$ITERATION" "$NOW" "$NEXT" "$INTERVAL_SECONDS" "$PROMPT"
+  emit_json "$ITERATION" "$NOW" "$NEXT" "$INTERVAL_SECONDS" "$PROMPT" "running"
 
   # Check stop file
   if [[ -f "$STOP_FILE" ]]; then
