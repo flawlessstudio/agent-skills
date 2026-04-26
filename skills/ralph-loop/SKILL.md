@@ -84,8 +84,10 @@ Next check in 5 minutes at 10:10 UTC.
 
 The loop can be stopped by:
 - Sending SIGTERM/SIGINT (Ctrl+C)
-- Creating a stop file: `touch /tmp/ralph-loop.stop`
+- Creating the stop file printed at startup: `touch /tmp/ralph-loop-<PID>.stop`
 - The prompt output containing the string `STOP_LOOP`
+
+Each loop instance uses a unique per-process stop file (shown in the startup log), so multiple concurrent loops do not interfere with each other.
 
 ## Troubleshooting
 
