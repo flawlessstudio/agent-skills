@@ -90,7 +90,7 @@ Each loop instance uses a unique per-process stop file so multiple concurrent lo
 Minimum interval is 30 seconds. Shorter intervals will be clamped to 30s.
 
 ### Invalid interval format
-Intervals must match `^[0-9]+[smhd]$` (e.g. `5m`, `2h`, `1d`). Values like `abcm` or `5x` are rejected with an error message.
+Intervals must match `^[0-9]+([smhd])?$` — a number with an optional unit suffix (e.g. `300`, `5m`, `2h`, `1d`). Plain numbers are treated as seconds. Values like `abcm` or `5x` are rejected with an error message.
 
 ### Stop file not working
 The stop file path is printed at startup (e.g. `/tmp/ralph-loop-1234.stop`). Use that exact path — each process has its own unique file.
