@@ -102,9 +102,83 @@ For detailed information about:
 - Restart Claude Code
 - Check the plugin status: `/plugin list`
 
+---
+
+# Model Context Protocol (MCP) Apps Marketplace
+
+In addition to everything-claude-code, this repository also integrates with the **Model Context Protocol apps marketplace** to provide external tool integrations and MCP server connections.
+
+## Quick Start for MCP Apps
+
+```bash
+/plugin marketplace add modelcontextprotocol/ext-apps
+/plugin install mcp-apps@modelcontextprotocol-ext-apps
+```
+
+### Or use the auto-install scripts:
+```bash
+bash scripts/install-mcp-apps.sh
+node scripts/install-mcp-apps.js
+```
+
+## What is MCP?
+
+The **Model Context Protocol** is a standardized way to connect Claude to external tools, data sources, and services. The MCP marketplace provides pre-built integrations for:
+
+- **Development Tools**: Git, GitHub, Docker, npm, CI/CD systems
+- **Databases**: PostgreSQL, MySQL, MongoDB, S3
+- **Communication**: Slack, Email, Discord, Webhooks
+- **Cloud Services**: AWS, Google Cloud, Azure
+- **Business Tools**: Jira, Salesforce, Notion, Asana
+
+## Configuration After Installation
+
+After installing MCP apps, configure servers in `~/.claude/mcp-config.json`:
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "node",
+      "args": ["~/.claude/mcp-servers/github/index.js"],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      }
+    },
+    "postgres": {
+      "command": "node",
+      "args": ["~/.claude/mcp-servers/postgres/index.js"],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}"
+      }
+    }
+  }
+}
+```
+
+## Using MCP Tools
+
+Once configured, access MCP-provided tools:
+
+```bash
+@mcp/github              # GitHub operations
+@mcp/postgres            # Database queries
+@mcp/slack               # Slack integration
+@mcp/docker              # Container management
+```
+
+## Documentation
+
+- **Full MCP Apps Guide**: See [MCP_APPS.md](./MCP_APPS.md)
+- **MCP Official Docs**: https://modelcontextprotocol.io/
+- **MCP Servers Registry**: https://github.com/modelcontextprotocol/servers
+
+---
+
 ## Links
 
-- **Repository**: https://github.com/affaan-m/everything-claude-code
+- **everything-claude-code Repository**: https://github.com/affaan-m/everything-claude-code
+- **MCP Registry**: https://modelcontextprotocol.io/
 - **Claude Code Docs**: https://claude.ai/help/claude-code
 - **Agent Skills Repo**: This repository
 
@@ -112,5 +186,6 @@ For detailed information about:
 
 For issues with:
 - **everything-claude-code plugin**: Open issues on https://github.com/affaan-m/everything-claude-code
+- **MCP Apps**: Open issues on https://github.com/modelcontextprotocol/servers
 - **Claude Code**: Visit https://github.com/anthropics/claude-code/issues
 - **This repository**: Open issues locally
